@@ -1,5 +1,6 @@
 ﻿using shared;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Threading;
@@ -54,15 +55,36 @@ public class ChatLobbyClient : MonoBehaviour
         }
     }
 
-    private void onClicked() {
+    private async void onClicked() {
         if (accepted) {
             WriteObject(new ButtonClickMessage());
+        }   
+        StartCoroutine(reqeust());
+    }
+
+    private IEnumerator reqeust() {
+        UnityWebRequest www = UnityWebRequest.Get("http://" + serverAdress + ":" + port);
+
+        yield return www.SendWebRequest();
+
+        if (www.result != UnityWebRequest.Result.Success) {
+            Debug.Log(www.error);
+            text.text = www.error.ToString();
+        } else {
+            // Show results as text
+            Debug.Log(www.downloadHandler.text);
+            AcceptClientMessage message = new AcceptClientMessage();
+            message.Deserialize(new Packet(www.downloadHandler.data));
+            text.text = message.GetId() + "";
+
+            // Or retrieve results as binary data
+            byte[] results = www.downloadHandler.data;
         }
     }
 
     private void Update()
     {
-        button.gameObject.SetActive(accepted);
+        //button.gameObject.SetActive(accepted);
         try
         {
             if (client.Available > 0)
@@ -89,9 +111,9 @@ public class ChatLobbyClient : MonoBehaviour
         catch (Exception e)
         {
             //for quicker testing, we reconnect if something goes wrong.
-            Debug.Log(e.Message);
-            client.Close();
-            connectToServer();
+            //Debug.Log(e.Message);
+            //client.Close();
+            //connectToServer();
         }
     }
 

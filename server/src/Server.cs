@@ -3,25 +3,63 @@ using System.Net;
 using shared;
 
 
-class TCPServer
+class Server
 {
+	public static void Main() {
+		listener.Start();
+		Console.WriteLine("Listener Started");
 
-    private static int nextID = 0;
-    public static void Main(string[] args)
-	{
-		TCPServer server = new TCPServer();
-		server.run();
+		int port = 55555;
+
+		listener.Prefixes.Add($"http://localhost:{port}/");
+		listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+		listener.Prefixes.Add($"http://+:{port}/");
+		listener.Prefixes.Add($"http://*:{port}/");
+
+		while (true) {
+			HttpListenerContext context = listener.GetContext();
+			HttpListenerRequest request = context.Request;
+
+
+			HttpListenerResponse response = context.Response;
+			response.AddHeader("Access-Control-Allow-Credentials", "true");
+			response.AddHeader("Access-Control-Allow-Headers", "Accept, X-Access-Token, X-Application-Name, X-Request-Sent-Time");
+			response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+			response.AddHeader("Access-Control-Allow-Origin", "*");
+			// Construct a response.
+			string responseString = "1";
+			//byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+			Packet packet = new Packet();
+			AcceptClientMessage message = new AcceptClientMessage(1);
+            message.Serialize(packet);
+            byte[] buffer = packet.GetBytes();
+            // Get a response stream and write the response to it.
+            response.ContentLength64 = buffer.Length;
+			Stream output = response.OutputStream;
+			output.Write(buffer, 0, buffer.Length);
+			// You must close the output stream.
+			output.Close();
+		}
+		listener.Stop();
 	}
-
-	internal static TcpListener listener;
+    
+    private static int nextID = 0;
+    /*public static void Main(string[] args)
+	{
+		Server server = new Server();
+		server.run();
+	}*/
+	
+	internal static HttpListener listener = new HttpListener();
 	internal static Dictionary<ClientData, Avatar> clients = new Dictionary<ClientData, Avatar>();
 	internal static Queue<Message> pendingMessages = new Queue<Message>();
 
 	private void run()
 	{
 		Console.WriteLine("Server started on port 55555");
+        listener = new HttpListener();
 
-		listener = new TcpListener(IPAddress.Any, 55555);
+        listener.Prefixes.Add("http://*:55555/");
 		listener.Start();
 
 		while (true)
@@ -46,15 +84,15 @@ class TCPServer
 
 	private void processNewClients()
 	{
-		while (listener.Pending())
+		while (false)//listener.Pending())
 		{
-			TcpClient acceptedClient = listener.AcceptTcpClient();
-			ClientData acceptedClientData = new ClientData(acceptedClient);
+			//TcpClient acceptedClient = listener.AcceptTcpClient();
+			//ClientData acceptedClientData = new ClientData(acceptedClient);
 			Avatar newAvatar = new Avatar(nextID++, new Random().Next(0, 1000));
 
-            clients.Add(acceptedClientData, newAvatar);
+            //clients.Add(acceptedClientData, newAvatar);
 
-            pendingMessages.Enqueue(new Message(new AcceptClientMessage(newAvatar.GetID()), acceptedClientData));
+            //pendingMessages.Enqueue(new Message(new AcceptClientMessage(newAvatar.GetID()), acceptedClientData));
 
 			Console.WriteLine("Accepted new client.");
 		}
@@ -139,14 +177,14 @@ internal class Message
 		{
 			try
 			{
-				if (TCPServer.clients.Keys.Contains(client))
+				if (Server.clients.Keys.Contains(client))
 					StreamUtil.WriteObject(client.GetStream(), pObject);
 			}
 			catch (Exception e)
 			{
 				Console.WriteLine("an error occured when trying to write an object to client, removing client:");
 				Console.WriteLine(e.Message);
-				TCPServer.clients.Remove(client);
+				Server.clients.Remove(client);
 			}
 		}
 	}

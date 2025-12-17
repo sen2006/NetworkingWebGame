@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Net.Sockets;
+using System.IO;
 
 namespace shared
 {
@@ -22,7 +20,7 @@ namespace shared
 		/**
 		 * Writes the size of the given byte array into the stream and then the bytes themselves.
 		 */
-		private static void WriteBytes(NetworkStream pStream, byte[] pMessage)
+		private static void WriteBytes(Stream pStream, byte[] pMessage)
 		{
 			if (pMessage.Length == 0) return;
 
@@ -35,7 +33,7 @@ namespace shared
 		/**
 		 * Reads the amount of bytes to receive from the stream and then the bytes themselves.
 		 */
-		private static byte[] ReadBytes(NetworkStream pStream)
+		private static byte[] ReadBytes(Stream pStream)
 		{
 
 			//get the message size first
@@ -44,7 +42,7 @@ namespace shared
 			return Read(pStream, byteCountToRead);
 		}
 
-		public static void WriteObject<T>(NetworkStream pStream, T pObject) where T : ISerializable
+		public static void WriteObject<T>(Stream pStream, T pObject) where T : ISerializable
 		{
 			Packet packet = new Packet();
 			packet.Write(pObject.GetType().FullName);
@@ -52,7 +50,7 @@ namespace shared
 			WriteBytes(pStream,packet.GetBytes());
 		}
 
-		public static ISerializable ReadObject(NetworkStream pStream)
+		public static ISerializable ReadObject(Stream pStream)
 		{
 			byte[] bytes = ReadBytes(pStream);
 			Packet packet = new Packet(bytes);
@@ -60,7 +58,7 @@ namespace shared
 			
 		}
 
-		public static T ReadObject<T>(NetworkStream pStream) where T : ISerializable
+		public static T ReadObject<T>(Stream pStream) where T : ISerializable
 		{
 			ISerializable obj = ReadObject(pStream);
             if (obj is T toReturn)
@@ -71,7 +69,7 @@ namespace shared
         /**
 		 * Read the given amount of bytes from the stream
 		 */
-        private static byte[] Read(NetworkStream pStream, int pByteCount)
+        private static byte[] Read(Stream pStream, int pByteCount)
 		{
 			//create a buffer to hold all the requested bytes
 			byte[] bytes = new byte[pByteCount];
