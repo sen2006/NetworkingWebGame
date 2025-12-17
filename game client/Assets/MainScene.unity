@@ -390,8 +390,8 @@ MonoBehaviour:
   text: {fileID: 77119585}
   serverAddresses:
   - vanulden.i234.me
-  - 192.168.1.12
   - 127.0.0.1
+  - 192.168.1.12
   cachedAddress: 
   port: 55555
   maxSearchTimeout: 3

@@ -7,8 +7,7 @@
     {
         int id;
 
-
-        public AcceptClientMessage() { }
+        public AcceptClientMessage() {}
         public AcceptClientMessage(int id) { this.id = id; }
 
         public int GetId() { return id; }

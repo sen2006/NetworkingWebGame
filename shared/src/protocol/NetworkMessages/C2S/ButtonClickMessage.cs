@@ -6,10 +6,10 @@ namespace shared {
     public class ButtonClickMessage : ISerializable{
         public void Deserialize(Packet pPacket) { }
 
+        public void Serialize(Packet pPacket) { }
+
         public bool HasReturnMessage() {
             return false;
         }
-
-        public void Serialize(Packet pPacket) { }
     }
 }

@@ -36,7 +36,6 @@ public class ChatLobbyClient : MonoBehaviour {
         button.onClick.AddListener(onClicked);
         button.gameObject.SetActive(false);
         StartCoroutine(searchServer());
-        StartCoroutine(handleMessageSending());
         
         //connectToServer();
         //heartbeatThread.Start();
@@ -96,6 +95,7 @@ public class ChatLobbyClient : MonoBehaviour {
 
     private void Update()
     {
+        handleMessageSending();
         if (accepted) { button.gameObject.SetActive(true); }
         //button.gameObject.SetActive(accepted);
         try
@@ -129,38 +129,44 @@ public class ChatLobbyClient : MonoBehaviour {
         }
     }
 
-    private IEnumerator handleMessageSending() {
-        while (true) {
-            if (networkMessageQueue.Count > 0) {
-                ISerializable message = networkMessageQueue.Dequeue();
-                Packet packet = new Packet();
+    private void handleMessageSending() {
+        while (networkMessageQueue.Count > 0) {
+            ISerializable message = networkMessageQueue.Dequeue();
+            StartCoroutine(SendMessage(message));
+        }
+    }
 
-                
-                packet.Write(message);
-                byte[] length = BitConverter.GetBytes(packet.GetBytes().Length);
-                
-                byte[] data = new byte[length.Length + packet.GetBytes().Length];
+    private IEnumerator SendMessage(ISerializable message) {
+        Packet packet = new Packet();
+        packet.Write(message);
+        byte[] length = BitConverter.GetBytes(packet.GetBytes().Length);
 
-                int i = 0;
-                foreach (byte b in length) {
-                    data[i++] = b;
-                }
-                foreach (byte b in packet.GetBytes()) {
-                    data[i++] = b;
-                }
+        byte[] data = new byte[length.Length + packet.GetBytes().Length];
 
-                UnityWebRequest www = UnityWebRequest.Put($"http://{cachedAddress}:{port}/",data);
+        int i = 0;
+        foreach (byte b in length) {
+            data[i++] = b;
+        }
+        foreach (byte b in packet.GetBytes()) {
+            data[i++] = b;
+        }
 
-                yield return www.SendWebRequest();
+        UnityWebRequest www = UnityWebRequest.Put($"http://{cachedAddress}:{port}/", data);
 
-                if (www.result != UnityWebRequest.Result.Success) {
-                    Debug.Log("Error when sending webRequest");
-                } else {
-                    // Show results as text
-                    ISerializable returnMessage = new Packet(www.downloadHandler.data).ReadObject();
-                }
-            }
-            yield return null;
+        yield return www.SendWebRequest();
+
+        if (www.result != UnityWebRequest.Result.Success) {
+            Debug.Log("Error when sending webRequest");
+        } else {
+            // Show results as text
+            ISerializable returnMessage = new Packet(www.downloadHandler.data).ReadObject();
+            HandleMessage(returnMessage);
+        }
+    }
+
+    private static void HandleMessage(ISerializable message) {
+        if (message is AcceptClientMessage) {
+            Debug.Log("Accept Recieved");
         }
     }
 

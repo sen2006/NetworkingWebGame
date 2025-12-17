@@ -25,17 +25,17 @@ class Server
 
 			HttpListenerResponse response = context.Response;
 			response.AddHeader("Access-Control-Allow-Credentials", "true");
-			response.AddHeader("Access-Control-Allow-Headers", "Accept, X-Access-Token, X-Application-Name, X-Request-Sent-Time");
-			response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT");
+			response.AddHeader("Access-Control-Allow-Headers", "Accept, X-Access-Token, X-Application-Name, X-Request-Sent-Time, Content-Type");
+			response.AddHeader("Access-Control-Allow-Methods", "PUT, GET, POST, OPTIONS");
 			response.AddHeader("Access-Control-Allow-Origin", "*");
 
 
-			if (request.HttpMethod == "GET") {
+			if (request.HttpMethod == "GET" || request.HttpMethod == "OPTIONS") {
 				Packet packet = new Packet();
 				AcceptClientMessage message = new AcceptClientMessage(0);
 				packet.Write(message);
 				byte[] buffer = packet.GetBytes();
-				Console.WriteLine("RequestRecieved, sending response");
+				Console.WriteLine("Get RequestRecieved, sending response");
 				response.ContentLength64 = buffer.Length;
 				Stream output = response.OutputStream;
 				output.Write(buffer, 0, buffer.Length);
@@ -43,7 +43,8 @@ class Server
 			}
 			if (request.HttpMethod == "PUT") {
 				try {
-					byte[] inLenthBuffer = new byte[4];
+                    Console.WriteLine("PUT Message Recieved");
+                    byte[] inLenthBuffer = new byte[4];
 					request.InputStream.Read(inLenthBuffer, 0, 4);
 					byte[] inBuffer = new byte[BitConverter.ToInt32(inLenthBuffer)];
 					request.InputStream.Read(inBuffer, 0, inBuffer.Length);
@@ -64,7 +65,7 @@ class Server
 					output.Close();
 
 
-					Console.WriteLine($"MessageID: {messageCount++}");
+					Console.WriteLine($"PUT MessageID: {++messageCount}");
 				} catch (Exception e) {
 					Console.WriteLine("Ran into Error reading incoming message: ");
 					Console.WriteLine(e);
