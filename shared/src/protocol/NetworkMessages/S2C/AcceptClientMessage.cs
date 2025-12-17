@@ -22,5 +22,9 @@
         {
             id = pPacket.ReadInt();
         }
+
+        public bool HasReturnMessage() {
+            return false;
+        }
     }
 }

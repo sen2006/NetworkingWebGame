@@ -15,5 +15,7 @@
          * Read all the data for 'this' object from the Packet
          */
         void Deserialize(Packet pPacket);
+
+        bool HasReturnMessage();
     }
 }

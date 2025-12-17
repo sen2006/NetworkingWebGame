@@ -388,8 +388,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   button: {fileID: 2138595834}
   text: {fileID: 77119585}
-  serverAdress: localhost
+  serverAddresses:
+  - vanulden.i234.me
+  - 192.168.1.12
+  - 127.0.0.1
+  cachedAddress: 
   port: 55555
+  maxSearchTimeout: 3
 --- !u!4 &821090775
 Transform:
   m_ObjectHideFlags: 0
