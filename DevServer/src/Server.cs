@@ -34,6 +34,7 @@ class Server
             message.Serialize(packet);
             byte[] buffer = packet.GetBytes();
             // Get a response stream and write the response to it.
+			Console.WriteLine("RequestRecieved, sending response");
             response.ContentLength64 = buffer.Length;
 			Stream output = response.OutputStream;
 			output.Write(buffer, 0, buffer.Length);
