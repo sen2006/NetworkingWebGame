@@ -16,6 +16,6 @@
          */
         void Deserialize(Packet pPacket);
 
-        bool HasReturnMessage();
+        bool HasReturnMessage() { return false; }
     }
 }

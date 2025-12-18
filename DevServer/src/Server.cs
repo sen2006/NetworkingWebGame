@@ -4,19 +4,32 @@ using shared;
 
 class Server
 {
+	enum GameState {
+		WAITING,
+		RUNNING,
+		FINNISHED
+	}
+
+	private static Thread commandThread = new Thread(handleConsoleCommands);
+
 	internal static long messageCount = 0;
     internal static HttpListener listener = new HttpListener();
     internal static int port = 55555;
 
-	public static void Main() {
+	public static GameData _gameData = new GameData();
+    internal static string savePath = "./save";
+
+    public static void Main() {
 		listener.Start();
 		Console.WriteLine("Listener Started");
-
 
 		listener.Prefixes.Add($"http://localhost:{port}/");
 		listener.Prefixes.Add($"http://127.0.0.1:{port}/");
 		listener.Prefixes.Add($"http://+:{port}/");
 		listener.Prefixes.Add($"http://*:{port}/");
+
+		loadSaveData(savePath);
+		commandThread.Start();
 
 		while (true) {
 			HttpListenerContext context = listener.GetContext();
@@ -63,7 +76,7 @@ class Server
 					output.Write(buffer, 0, buffer.Length);
 					output.Close();
 
-
+					CheckSaveDataDirty();
 					Console.WriteLine($"PUT MessageID: {++messageCount}");
 				} catch (Exception e) {
 					Console.WriteLine("Ran into Error reading incoming message: ");
@@ -75,10 +88,55 @@ class Server
 	}
 
 	private static ISerializable handleMessage(ISerializable message) {
-
-
-		return new AcceptClientMessage(2);
+		bool lockTaken = false;
+		try {
+			Monitor.Enter(_gameData, ref lockTaken);
+            return new AcceptClientMessage(2);
+        } 
+		finally {
+			if (lockTaken) Monitor.Exit(_gameData);
+		}
+		
 	}
+
+	//command thread
+	private static void handleConsoleCommands() {
+		while (true) {
+			string input = Console.ReadLine();
+			bool lockTaken = false;
+			try {
+				Monitor.Enter(_gameData, ref lockTaken);
+				ConsoleCommands.HandleCommand(input);
+				CheckSaveDataDirty();
+			} finally {
+				if (lockTaken) Monitor.Exit(_gameData);
+			}
+		}
+	}
+
+	public static void loadSaveData(string path) {
+		if (File.Exists(path)) {
+			byte[] data = File.ReadAllBytes(path);
+			Packet packet = new Packet(data);
+			_gameData = (GameData)packet.ReadObject();
+		}
+	}
+
+    public static void saveGameData(string path) {
+        Packet save = new Packet();
+        save.Write(_gameData);
+		_gameData.updated = false;
+		File.Delete(path);
+        File.WriteAllBytes(path, save.GetBytes());
+    }
+
+	public static void CheckSaveDataDirty() {
+		if (_gameData.updated) {
+			Console.WriteLine("Saving...");
+			saveGameData(savePath);
+			Console.WriteLine("Save complete");
+        }
+    }
 
 }
 

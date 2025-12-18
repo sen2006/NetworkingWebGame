@@ -38,6 +38,7 @@ namespace shared
 
 		public void Write (int pInt)							{		writer.Write(pInt);			}
 		public void Write (float pFloat)						{		writer.Write(pFloat);			}
+		public void Write (double pDouble)						{		writer.Write(pDouble);			}
 		public void Write (string pString)						{		writer.Write(pString);		}
 		public void Write (bool pBool)							{		writer.Write(pBool);		}
 		public void Write(Vector3 pVec3)
@@ -56,6 +57,7 @@ namespace shared
 
 		public int ReadInt() { return reader.ReadInt32(); }
 		public float ReadFloat() { return reader.ReadSingle(); }
+		public double ReadDouble() { return reader.ReadDouble(); }
 		public string ReadString() { return reader.ReadString(); }
 		public bool ReadBool() { return reader.ReadBoolean(); }
 		internal Vector3 ReadVec3() { return new Vector3(ReadFloat(), ReadFloat(), ReadFloat()); }
