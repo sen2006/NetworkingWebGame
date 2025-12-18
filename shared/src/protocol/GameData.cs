@@ -6,8 +6,8 @@ public class GameData : ISerializable {
     public bool updated;
 
     // <passWord, Team>
-    readonly Dictionary<string, Team> teams = new Dictionary<string, Team>();
-    readonly Dictionary<string, Task> tasks = new Dictionary<string, Task>();
+    readonly Dictionary<string, GameTeam> teams = new Dictionary<string, GameTeam>();
+    readonly Dictionary<string, GameTask> tasks = new Dictionary<string, GameTask>();
 
     public void addScore(string taskName, string teamPassWord, double score) {
         if (taskExists(taskName) && teamExists(teamPassWord)) 
@@ -25,24 +25,24 @@ public class GameData : ISerializable {
 
     public void CreateTask(string name) {
         if (tasks.ContainsKey(name)) throw new Exception("Name already in use");
-        tasks.Add(name, new Task());
+        tasks.Add(name, new GameTask());
         updated = true;
     }
 
     public void CreateTeam(string name, string pass) {
         if (teams.ContainsKey(pass)) throw new Exception("Password already in use");
-        teams.Add(pass, new Team(name));
+        teams.Add(pass, new GameTeam(name));
         updated = true;
     }
 
     public void Serialize(Packet pPacket) {
         pPacket.Write(teams.Count);
         pPacket.Write(tasks.Count);
-        foreach (KeyValuePair<string, Team> pair in teams) {
+        foreach (KeyValuePair<string, GameTeam> pair in teams) {
             pPacket.Write(pair.Key);
             pPacket.Write(pair.Value);
         }
-        foreach (KeyValuePair<string, Task> pair in tasks) {
+        foreach (KeyValuePair<string, GameTask> pair in tasks) {
             pPacket.Write(pair.Key);
             pPacket.Write(pair.Value);
         }
@@ -54,36 +54,48 @@ public class GameData : ISerializable {
         teams.Clear();
         tasks.Clear();
         while (teamCount > 0) {
-            teams.Add(pPacket.ReadString(), (Team)pPacket.ReadObject());
+            teams.Add(pPacket.ReadString(), (GameTeam)pPacket.ReadObject());
             teamCount--;
         }
         while (taskCount > 0) {
-            tasks.Add(pPacket.ReadString(), (Task)pPacket.ReadObject());
+            tasks.Add(pPacket.ReadString(), (GameTask)pPacket.ReadObject());
             taskCount--;
         }
     }
 
     public void ConsoleLogTeams() {
-        foreach (KeyValuePair<string,Team> pair in teams) {
+        foreach (KeyValuePair<string,GameTeam> pair in teams) {
             Console.WriteLine($" - {pair.Value.name}, [{pair.Key}]");
         }
     }
 
     public void ConsoleLogTasks() {
-        foreach (KeyValuePair<string, Task> pair in tasks) {
+        foreach (KeyValuePair<string, GameTask> pair in tasks) {
             Console.WriteLine($" - {pair.Key}");
         }
     }
+
+    public GameTeam GetTeamData(string pass) {
+        return teams[pass];
+    }
+
+    public int TeamAmount() {
+        return teams.Count;
+    }
+    
+    public int TaskAmount() {
+        return tasks.Count;
+    }
 }
 
-public class Team : ISerializable{
+public class GameTeam : ISerializable{
 
     public string name { get; private set; }
     public int R { get; private set; }
     public int G { get; private set; }
     public int B { get; private set; }
-    public Team() { }
-    public Team(string name) { this.name = name; }
+    public GameTeam() { }
+    public GameTeam(string name) { this.name = name; }
 
     public void Serialize(Packet pPacket) {
         pPacket.Write(name);
@@ -101,24 +113,24 @@ public class Team : ISerializable{
     }
 }
 
-public class Task : ISerializable{
-    private readonly Dictionary<Team, double> scores = new Dictionary<Team, double>();
-    public bool hasTeamScore(Team team) {
+public class GameTask : ISerializable{
+    private readonly Dictionary<GameTeam, double> scores = new Dictionary<GameTeam, double>();
+    public bool hasTeamScore(GameTeam team) {
         return scores.ContainsKey(team);
     }
 
-    public double getScore(Team team) {
+    public double getScore(GameTeam team) {
         if (!hasTeamScore(team)) return 0;
         return scores[team];
     }
 
-    public void setScore(Team team, double score) {
+    public void setScore(GameTeam team, double score) {
         scores.Add(team, score);
     }
 
     public void Serialize(Packet pPacket) {
         pPacket.Write(scores.Count);
-        foreach (KeyValuePair<Team,double> pair in scores) {
+        foreach (KeyValuePair<GameTeam,double> pair in scores) {
             pPacket.Write(pair.Key);
             pPacket.Write(pair.Value);
         }
@@ -128,7 +140,7 @@ public class Task : ISerializable{
         int scoreCount = pPacket.ReadInt();
         scores.Clear();
         while (scoreCount > 0) {
-            scores.Add((Team)pPacket.ReadObject(), pPacket.ReadDouble());
+            scores.Add((GameTeam)pPacket.ReadObject(), pPacket.ReadDouble());
             scoreCount--;
         }
     }

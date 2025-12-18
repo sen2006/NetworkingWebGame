@@ -22,8 +22,9 @@ class Server
     public static void Main() {
 		listener.Start();
 		Console.WriteLine("Listener Started");
+        Console.WriteLine("");
 
-		listener.Prefixes.Add($"http://localhost:{port}/");
+        listener.Prefixes.Add($"http://localhost:{port}/");
 		listener.Prefixes.Add($"http://127.0.0.1:{port}/");
 		listener.Prefixes.Add($"http://+:{port}/");
 		listener.Prefixes.Add($"http://*:{port}/");
@@ -47,8 +48,9 @@ class Server
 				AcceptClientMessage message = new AcceptClientMessage(0);
 				packet.Write(message);
 				byte[] buffer = packet.GetBytes();
-				Console.WriteLine("Get RequestRecieved, sending response");
-				response.ContentLength64 = buffer.Length;
+                Console.WriteLine("Get RequestRecieved, sending response");
+                Console.WriteLine("");
+                response.ContentLength64 = buffer.Length;
 				Stream output = response.OutputStream;
 				output.Write(buffer, 0, buffer.Length);
 				output.Close();
@@ -78,10 +80,12 @@ class Server
 
 					CheckSaveDataDirty();
 					Console.WriteLine($"PUT MessageID: {++messageCount}");
-				} catch (Exception e) {
+                    Console.WriteLine("");
+                } catch (Exception e) {
 					Console.WriteLine("Ran into Error reading incoming message: ");
 					Console.WriteLine(e);
-				}
+                    Console.WriteLine("");
+                }
 			}
 		}
 		listener.Stop();
@@ -91,13 +95,28 @@ class Server
 		bool lockTaken = false;
 		try {
 			Monitor.Enter(_gameData, ref lockTaken);
-            return new AcceptClientMessage(2);
+
+			if (message is LoginAttemptMessage loginAttemptMessage) {
+				string password = loginAttemptMessage.password.ToLower();
+				LoginResultMessage loginResult = new LoginResultMessage();
+				Console.WriteLine($"Client atempting login with pass: {password}");
+				if (_gameData.teamExists(password)) {
+					Console.WriteLine($"Team found, returning success");
+					GameTeam team = _gameData.GetTeamData(password);
+					loginResult = new LoginResultMessage(team, password);
+				} else Console.WriteLine($"No Team found, returning faillure");
+				return loginResult;
+			} else if (message is RequestDataUpdateMessage buttonClickMessage) {
+                Console.WriteLine("DataUpdateRequestRecieved, sending update");
+                return new DataUpdateMessage(_gameData);
+			}
+
+            throw new Exception($"UnHandledMessage: {message.GetType}");
         } 
 		finally {
 			if (lockTaken) Monitor.Exit(_gameData);
-		}
-		
-	}
+        }
+    }
 
 	//command thread
 	private static void handleConsoleCommands() {
@@ -135,6 +154,7 @@ class Server
 			Console.WriteLine("Saving...");
 			saveGameData(savePath);
 			Console.WriteLine("Save complete");
+			Console.WriteLine("");
         }
     }
 

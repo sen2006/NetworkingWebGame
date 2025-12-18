@@ -6,21 +6,15 @@ using System.Net.Sockets;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
-using UnityEngine.UI;
 
-/**
- * The main ChatLobbyClient where you will have to do most of your work.
- * 
- * @author J.C. Wichman
- */
-public class ChatLobbyClient : MonoBehaviour {
-    public Button button;
-    public TextMeshProUGUI text;
-
+public class MainNetworking : MonoBehaviour {
     private static Queue<ISerializable> networkMessageQueue = new Queue<ISerializable>();
+
 
     //TODO web does not support threads, rework this:
     //private static Thread heartbeatThread = new Thread(HeartBeat);
+
+    public UIManager _UIManager;
 
     [SerializeField] private string[] serverAddresses;
     [SerializeField] private string cachedAddress = null;
@@ -31,28 +25,25 @@ public class ChatLobbyClient : MonoBehaviour {
     private int ID = -1;
     private bool accepted;
 
+    // game data
+
+    [SerializeField] string cashedTeamPassword;
+    GameTeam cashedTeam;
+    [SerializeField] bool loggedIn = false;
+    GameData cashedGameData;
+
     private void Start()
     {
-        button.onClick.AddListener(onClicked);
-        button.gameObject.SetActive(false);
         StartCoroutine(searchServer());
     }
 
     private void Update() {
         handleMessageSending();
-        if (accepted) { button.gameObject.SetActive(true); }
+        if (accepted) { 
+        
+        }
         //button.gameObject.SetActive(accepted);
        
-    }
-
-    private async void onClicked() {
-        if (accepted) {
-            int i = 0;
-            while (i < 80) {
-                WriteObject(new ButtonClickMessage());
-                i++;
-            }
-        }
     }
 
     private IEnumerator searchServer() {
@@ -76,6 +67,7 @@ public class ChatLobbyClient : MonoBehaviour {
                         cachedAddress = adress;
                         accepted = true;
                         ID = acm.GetId();
+                        _UIManager.ServerFound();
                         yield break;
                     } else { throw new Exception("Recieved wrong message when expecting accept message"); }
                 }
@@ -115,19 +107,40 @@ public class ChatLobbyClient : MonoBehaviour {
         if (www.result != UnityWebRequest.Result.Success) {
             Debug.Log("Error when sending webRequest");
         } else {
-            // Show results as text
             ISerializable returnMessage = new Packet(www.downloadHandler.data).ReadObject();
             HandleMessage(returnMessage);
         }
     }
 
-    private static void HandleMessage(ISerializable message) {
+    private void HandleMessage(ISerializable message) {
         if (message is AcceptClientMessage) {
             Debug.Log("Accept Recieved");
+            return;
+        } else if (message is LoginResultMessage loginResultMessage) {
+            if (loginResultMessage.success) {
+                cashedTeam = loginResultMessage.team;
+                cashedTeamPassword = loginResultMessage.password;
+                loggedIn = true;
+                _UIManager.LoggedIn();
+                _UIManager.SetTeamName(cashedTeam.name);
+                WriteObject(new RequestDataUpdateMessage());
+                Debug.Log($"Logged in as {cashedTeam.name}");
+            } else {
+                _UIManager.LoggedInWrongPass();
+                Debug.Log("Wrong password");
+            }
+            return;
+        } else if (message is DataUpdateMessage dataUpdateMessage) {
+            cashedGameData = dataUpdateMessage.data;
+            _UIManager.UpdateGameDataToScreen(cashedGameData);
         }
     }
 
-    private static void WriteObject<T>(T pObject) where T : ISerializable {
+    public void attemptLogin(string pass) {
+        WriteObject(new LoginAttemptMessage(pass));
+    }
+
+    private void WriteObject<T>(T pObject) where T : ISerializable {
        networkMessageQueue.Enqueue(pObject);
     }
 
