@@ -36,26 +36,13 @@ public class ChatLobbyClient : MonoBehaviour {
         button.onClick.AddListener(onClicked);
         button.gameObject.SetActive(false);
         StartCoroutine(searchServer());
-        
-        //connectToServer();
-        //heartbeatThread.Start();
     }
 
-    private void connectToServer()
-    {
-        accepted = false;
-        ID = -1;
-        try
-        {
-            client = new TcpClient();
-            //client.Connect(serverAdress, port);
-            Debug.Log("Connected to server.");
-        }
-        catch (Exception e)
-        {
-            Debug.Log("Could not connect to server:");
-            Debug.Log(e.Message);
-        }
+    private void Update() {
+        handleMessageSending();
+        if (accepted) { button.gameObject.SetActive(true); }
+        //button.gameObject.SetActive(accepted);
+       
     }
 
     private async void onClicked() {
@@ -82,52 +69,22 @@ public class ChatLobbyClient : MonoBehaviour {
                     // Show results as text
                     ISerializable message = new Packet(www.downloadHandler.data).ReadObject();
 
-                    Debug.Log("ServerFound on: " + $"http://{adress}:{port}/, cashing IP");
+                    if (message is AcceptClientMessage acm) {
 
-                    cachedAddress = adress;
-                    accepted = true;
-                    yield break;
+                        Debug.Log("ServerFound on: " + $"http://{adress}:{port}/, cashing IP");
+
+                        cachedAddress = adress;
+                        accepted = true;
+                        ID = acm.GetId();
+                        yield break;
+                    } else { throw new Exception("Recieved wrong message when expecting accept message"); }
                 }
             } finally {
             }
         }
     }
 
-    private void Update()
-    {
-        handleMessageSending();
-        if (accepted) { button.gameObject.SetActive(true); }
-        //button.gameObject.SetActive(accepted);
-        try
-        {
-            if (client.Available > 0)
-            {
-                ISerializable readObject = StreamUtil.ReadObject(client.GetStream());
-                if (accepted == false) 
-                { 
-                    if (readObject is AcceptClientMessage acceptClientMessage)
-                    {
-                        ID = acceptClientMessage.GetId();
-                        accepted = true;
-                    }
-                }
-                else
-                {
-                    if (readObject is AcceptClientMessage serverChatMessage)
-                    {
-                        Debug.LogError("Received accept message while already accepted");
-                    }
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            //for quicker testing, we reconnect if something goes wrong.
-            //Debug.Log(e.Message);
-            //client.Close();
-            //connectToServer();
-        }
-    }
+   
 
     private void handleMessageSending() {
         while (networkMessageQueue.Count > 0) {
