@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
+using static System.Net.WebRequestMethods;
 
 public class MainNetworking : MonoBehaviour {
     private static Queue<ISerializable> networkMessageQueue = new Queue<ISerializable>();
@@ -17,6 +18,7 @@ public class MainNetworking : MonoBehaviour {
     public UIManager _UIManager;
 
     [SerializeField] private string[] serverAddresses;
+    [SerializeField] private bool isHTTPS;
     [SerializeField] private string cachedAddress = null;
     [SerializeField] private int port = 55555;
     [SerializeField] private int maxSearchTimeout = 10;
@@ -49,20 +51,21 @@ public class MainNetworking : MonoBehaviour {
     private IEnumerator searchServer() {
         foreach (string adress in serverAddresses) {
             try {
-                Debug.Log("Searching Server On: " + $"http://{adress}:{port}/");
-                UnityWebRequest www = UnityWebRequest.Get($"http://{adress}:{port}/");
+                string httpType = isHTTPS ? "https" : "http";
+                Debug.Log("Searching Server On: " + $"{httpType}://{adress}:{port}/");
+                UnityWebRequest www = UnityWebRequest.Get($"{httpType}://{adress}:{port}/");
                 www.timeout = maxSearchTimeout;
                 yield return www.SendWebRequest();
 
                 if (www.result != UnityWebRequest.Result.Success) {
-                    Debug.Log("ServerNotFound on: " + $"http://{adress}:{port}/");
+                    Debug.Log("Could not connect to: " + $"{httpType}://{adress}:{port}/\nReason: {www.error}");
                 } else {
                     // Show results as text
                     ISerializable message = new Packet(www.downloadHandler.data).ReadObject();
 
                     if (message is AcceptClientMessage acm) {
 
-                        Debug.Log("ServerFound on: " + $"http://{adress}:{port}/, cashing IP");
+                        Debug.Log("ServerFound on: " + $"{httpType}://{adress}:{port}/, cashing IP");
 
                         cachedAddress = adress;
                         accepted = true;

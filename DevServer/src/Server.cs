@@ -12,9 +12,10 @@ class Server
 
 	private static Thread commandThread = new Thread(handleConsoleCommands);
 
-	internal static long messageCount = 0;
-    internal static HttpListener listener = new HttpListener();
-    internal static int port = 55555;
+    private static long messageCount = 0;
+    private static HttpListener listener = new HttpListener();
+    private static int port = 55555;
+	private static bool isHTTPS = false;
 
 	public static GameData _gameData = new GameData();
     internal static string savePath = "./save";
@@ -23,11 +24,14 @@ class Server
 		listener.Start();
 		Console.WriteLine("Listener Started");
         Console.WriteLine("");
+		string httpType = isHTTPS ? "https" : "http";
 
-        listener.Prefixes.Add($"http://localhost:{port}/");
-		listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-		listener.Prefixes.Add($"http://+:{port}/");
-		listener.Prefixes.Add($"http://*:{port}/");
+
+        listener.Prefixes.Add($"{httpType}://localhost:{port}/");
+		listener.Prefixes.Add($"{httpType}://127.0.0.1:{port}/");
+		listener.Prefixes.Add($"{httpType}://+:{port}/");
+		listener.Prefixes.Add($"{httpType}://*:{port}/");
+
 
 		loadSaveData(savePath);
 		commandThread.Start();
@@ -41,9 +45,10 @@ class Server
 			response.AddHeader("Access-Control-Allow-Headers", "Accept, X-Access-Token, X-Application-Name, X-Request-Sent-Time, Content-Type");
 			response.AddHeader("Access-Control-Allow-Methods", "PUT, GET, POST, OPTIONS");
 			response.AddHeader("Access-Control-Allow-Origin", "*");
+			response.AddHeader("Content-Security-Policy", "upgrade-insecure-requests");
 
 
-			if (request.HttpMethod == "GET" || request.HttpMethod == "OPTIONS") {
+            if (request.HttpMethod == "GET" || request.HttpMethod == "OPTIONS") {
 				Packet packet = new Packet();
 				AcceptClientMessage message = new AcceptClientMessage(0);
 				packet.Write(message);
