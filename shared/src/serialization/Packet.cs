@@ -41,6 +41,7 @@ namespace shared
 		public void Write (double pDouble)						{		writer.Write(pDouble);			}
 		public void Write (string pString)						{		writer.Write(pString);		}
 		public void Write (bool pBool)							{		writer.Write(pBool);		}
+		public void Write(byte[] bytes)							{		writer.Write(bytes);		}
 		public void Write(Vector3 pVec3)
 		{
 			writer.Write(pVec3.X);

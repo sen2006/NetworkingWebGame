@@ -1,16 +1,16 @@
 ﻿using shared;
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Net.Sockets;
-using TMPro;
+//using System.Net.Sockets;
 using UnityEngine;
-using UnityEngine.Networking;
-using static System.Net.WebRequestMethods;
+
+using NativeWebSocket;
+using System.Threading.Tasks;
 
 public class MainNetworking : MonoBehaviour {
     private static Queue<ISerializable> networkMessageQueue = new Queue<ISerializable>();
 
+    NativeWebSocket.WebSocket websocket;
 
     //TODO web does not support threads, rework this:
     //private static Thread heartbeatThread = new Thread(HeartBeat);
@@ -23,9 +23,9 @@ public class MainNetworking : MonoBehaviour {
     [SerializeField] private int port = 55555;
     [SerializeField] private int maxSearchTimeout = 10;
 
-    private static TcpClient client;
+    //private static TcpClient client;
     private int ID = -1;
-    private bool accepted;
+    private bool connected;
 
     // game data
 
@@ -34,46 +34,57 @@ public class MainNetworking : MonoBehaviour {
     [SerializeField] bool loggedIn = false;
     GameData cashedGameData;
 
-    private void Start()
+    private async void Start()
     {
-        StartCoroutine(searchServer());
+        await connectServerAsync();
     }
 
-    private void Update() {
-        handleMessageSending();
-        if (accepted) { 
-        
+    private async void Update() {
+        if (!connected && websocket == null) {
+            await connectServerAsync();
+        } else if (websocket != null) {
+#if !UNITY_WEBGL || UNITY_EDITOR
+            websocket.DispatchMessageQueue();
+#endif
+            handleMessageSending();
         }
-        //button.gameObject.SetActive(accepted);
-       
     }
 
-    private IEnumerator searchServer() {
+    private async Task connectServerAsync() {
         foreach (string adress in serverAddresses) {
             try {
-                string httpType = isHTTPS ? "https" : "http";
-                Debug.Log("Searching Server On: " + $"{httpType}://{adress}:{port}/");
-                UnityWebRequest www = UnityWebRequest.Get($"{httpType}://{adress}:{port}/");
-                www.timeout = maxSearchTimeout;
-                yield return www.SendWebRequest();
+                Debug.Log($"Attempting to connect to: {adress}:{port}");
+                websocket = new WebSocket($"ws://{adress}:{port}");
+                //websocket = new WebSocket("ws://echo.websocket.events");
+                websocket.OnOpen += () =>
+                {   
+                    Debug.Log("Connection open!");
+                    connected = true;
+                };
 
-                if (www.result != UnityWebRequest.Result.Success) {
-                    Debug.Log("Could not connect to: " + $"{httpType}://{adress}:{port}/\nReason: {www.error}");
-                } else {
-                    // Show results as text
-                    ISerializable message = new Packet(www.downloadHandler.data).ReadObject();
+                websocket.OnError += (e) =>
+                {
+                    Debug.Log("Error! " + e);
+                };
 
-                    if (message is AcceptClientMessage acm) {
+                websocket.OnClose += (e) =>
+                {
+                    loggedIn = false;
+                    connected = false;
+                    Debug.Log("Connection closed!");
+                };
 
-                        Debug.Log("ServerFound on: " + $"{httpType}://{adress}:{port}/, cashing IP");
+                websocket.OnMessage += (bytes) =>
+                {
+                    Debug.Log("OnMessage!");
+                    //Debug.Log(bytes);
+                    Packet packet = new Packet(bytes);
+                    HandleMessage(packet.ReadObject());
+                };
 
-                        cachedAddress = adress;
-                        accepted = true;
-                        ID = acm.GetId();
-                        _UIManager.ServerFound();
-                        yield break;
-                    } else { throw new Exception("Recieved wrong message when expecting accept message"); }
-                }
+                // waiting for messages
+                await websocket.Connect();
+                return;
             } finally {
             }
         }
@@ -82,7 +93,7 @@ public class MainNetworking : MonoBehaviour {
    
 
     private void handleMessageSending() {
-        while (networkMessageQueue.Count > 0) {
+        while (networkMessageQueue.Count > 0) { 
             ISerializable message = networkMessageQueue.Dequeue();
             StartCoroutine(SendMessage(message));
         }
@@ -91,18 +102,9 @@ public class MainNetworking : MonoBehaviour {
     private IEnumerator SendMessage(ISerializable message) {
         Packet packet = new Packet();
         packet.Write(message);
-        byte[] length = BitConverter.GetBytes(packet.GetBytes().Length);
+        yield return websocket.Send(packet.GetBytes());
 
-        byte[] data = new byte[length.Length + packet.GetBytes().Length];
-
-        int i = 0;
-        foreach (byte b in length) {
-            data[i++] = b;
-        }
-        foreach (byte b in packet.GetBytes()) {
-            data[i++] = b;
-        }
-
+        /*
         UnityWebRequest www = UnityWebRequest.Put($"http://{cachedAddress}:{port}/", data);
 
         yield return www.SendWebRequest();
@@ -112,12 +114,13 @@ public class MainNetworking : MonoBehaviour {
         } else {
             ISerializable returnMessage = new Packet(www.downloadHandler.data).ReadObject();
             HandleMessage(returnMessage);
-        }
+        }*/
     }
 
     private void HandleMessage(ISerializable message) {
         if (message is AcceptClientMessage) {
             Debug.Log("Accept Recieved");
+            _UIManager.ServerFound();
             return;
         } else if (message is LoginResultMessage loginResultMessage) {
             if (loginResultMessage.success) {
@@ -147,4 +150,7 @@ public class MainNetworking : MonoBehaviour {
        networkMessageQueue.Enqueue(pObject);
     }
 
+    private async void OnApplicationQuit() {
+        await websocket.Close();
+    }
 }
