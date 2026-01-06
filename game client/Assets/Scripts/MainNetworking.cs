@@ -53,9 +53,9 @@ public class MainNetworking : MonoBehaviour {
     private async Task connectServerAsync() {
         foreach (string adress in serverAddresses) {
             try {
+                
+                websocket = new WebSocket($"wss://{adress}:{port}");
                 Debug.Log($"Attempting to connect to: {adress}:{port}");
-                websocket = new WebSocket($"ws://{adress}:{port}");
-                //websocket = new WebSocket("ws://echo.websocket.events");
                 websocket.OnOpen += () =>
                 {   
                     Debug.Log("Connection open!");

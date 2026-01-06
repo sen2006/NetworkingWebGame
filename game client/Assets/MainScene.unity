@@ -817,9 +817,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _UIManager: {fileID: 897108027}
   serverAddresses:
-  - vanulden.i234.me
-  - 127.0.0.1
+  - data.sengitsite.nl
   - 192.168.1.12
+  - 127.0.0.1
+  - localhost
   isHTTPS: 0
   cachedAddress: 
   port: 55555
