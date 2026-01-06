@@ -102,19 +102,8 @@ public class MainNetworking : MonoBehaviour {
     private IEnumerator SendMessage(ISerializable message) {
         Packet packet = new Packet();
         packet.Write(message);
+        Debug.Log($"Message Send: {message.GetType()}");
         yield return websocket.Send(packet.GetBytes());
-
-        /*
-        UnityWebRequest www = UnityWebRequest.Put($"http://{cachedAddress}:{port}/", data);
-
-        yield return www.SendWebRequest();
-
-        if (www.result != UnityWebRequest.Result.Success) {
-            Debug.Log("Error when sending webRequest");
-        } else {
-            ISerializable returnMessage = new Packet(www.downloadHandler.data).ReadObject();
-            HandleMessage(returnMessage);
-        }*/
     }
 
     private void HandleMessage(ISerializable message) {

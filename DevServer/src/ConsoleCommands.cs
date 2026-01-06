@@ -34,6 +34,11 @@ public class ConsoleCommands {
                     Server._gameData.ConsoleLogTasks();
                     break;
                 };
+                case "clients": {
+                    if (args.Length != 1) throw ilegalArgumentCount;
+                    Console.WriteLine($"Client Count: {Server.clients.Count}");
+                    break;
+                };
                 default: {
                     throw new Exception("Unknown Command");
                 };
