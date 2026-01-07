@@ -1,4 +1,6 @@
 ﻿
+using shared;
+
 public class ConsoleCommands {
     static Exception ilegalArgumentCount = new Exception("Wrong number of arguments");
 
@@ -39,6 +41,16 @@ public class ConsoleCommands {
                     Console.WriteLine($"Client Count: {Server.clients.Count}");
                     break;
                 };
+                case "updateclients": {
+                    if (args.Length != 1) throw ilegalArgumentCount;
+                    Console.WriteLine($"Updating data for all clients");
+                    Server.SendGameUpdateToAll();
+                    break;
+                };
+                case "test": {
+                    Server.messageQueue.Enqueue(new Message(new AcceptClientMessage(1), Server.clients));
+                    break;
+                }
                 default: {
                     throw new Exception("Unknown Command");
                 };

@@ -9,13 +9,14 @@ using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Threading;
 using shared;
+using System.Diagnostics;
 
 class Server {
     enum GameState { WAITING, RUNNING, FINNISHED }
 
     public static TcpListener server;
     public static List<ClientConnection> clients = new List<ClientConnection>();
-    static Queue<Message> messageQueue = new Queue<Message>();
+    public static Queue<Message> messageQueue = new Queue<Message>();
 
     static X509Certificate2 certificate = new X509Certificate2("./server.pfx", "password");
     private static Thread commandThread = new Thread(handleConsoleCommands);
@@ -65,44 +66,57 @@ class Server {
         clientThread.Start();
     }
 
-    private static async void HandleClient(ClientConnection client) {
+    private static void HandleClient(ClientConnection client) {
         try {
             byte[] buffer = new byte[4096];
             while (true) {
-                Console.WriteLine($"buffer: {buffer}");
-                //if (client.stream.Length > 0) {
-                    int bytesRead = await client.stream.ReadAsync(buffer, 0, buffer.Length);
-                    Console.WriteLine($"buffer: {buffer}");
-                    if (bytesRead == 0) break; // disconnected
+                int bytesRead = client.stream.Read(buffer, 0, buffer.Length);
+                Console.WriteLine($"buffer: {BitConverter.ToString(buffer, 0, bytesRead)}");
+                if (bytesRead == 0) break; // disconnected
 
-                    byte[] data = new byte[bytesRead];
-                    Array.Copy(buffer, data, bytesRead);
+                client.ReceiveBuffer.AddRange(buffer[..bytesRead]);
 
-                    // check if this is an initial handshake
-                    string text = Encoding.UTF8.GetString(data);
-                    if (Regex.IsMatch(text, "^GET", RegexOptions.IgnoreCase)) {
-                        PerformWebSocketHandshake(client, text);
-                        messageQueue.Enqueue(new Message(new AcceptClientMessage(1), client));
-                        continue;
+                byte[] data = new byte[bytesRead];
+                Array.Copy(buffer, data, bytesRead);
+
+                // check if this is an initial handshake
+                string text = Encoding.UTF8.GetString(data);
+                if (Regex.IsMatch(text, "^GET", RegexOptions.IgnoreCase)) {
+                    PerformWebSocketHandshake(client, text);
+                    continue;
+                }
+
+                //try decoding frames
+                var (messages, consumed) = WebSocketHelper.DecodeFramesIncremental(client);
+                foreach (var msg in messages) {
+                    Packet packet = new Packet(msg);
+                    ISerializable obj = packet.ReadObject();
+                    if (obj != null) {
+                        ISerializable response = HandleMessage(obj);
+                        if (response != null)
+                            messageQueue.Enqueue(new Message(response, client));
                     }
+                }
+
+                client.ReceiveBuffer.RemoveRange(0, consumed);
 
 
-                    // decode WebSocket frames
-                    List<byte[]> messages = WebSocketHelper.DecodeFrames(client, data);
-                    foreach (byte[] msg in messages) {
-                        Packet packet = new Packet(msg);
-                        ISerializable obj = packet.ReadObject();
-                        if (obj != null) {
-                            ISerializable response = HandleMessage(obj);
-                            if (response != null) {
-                                messageQueue.Enqueue(new Message(response, client));
-                            }
-                        }
-                    }
+                //decode WebSocket frames
+                //List<byte[]> messages = WebSocketHelper.DecodeFrames(client, data);
+                //foreach (byte[] msg in messages) {
+                //    Packet packet = new Packet(msg);
+                //    ISerializable obj = packet.ReadObject();
+                //    if (obj != null) {
+                //        ISerializable response = HandleMessage(obj);
+                //        if (response != null) {
+                //            messageQueue.Enqueue(new Message(response, client));
+                //        }
+                //    }
                 //}
             }
-        } catch (Exception) {
+        } catch (Exception e) {
             // client disconnected
+            Console.WriteLine($"Error occured: {e}");
         } finally {
             Console.WriteLine("Client disconnected");
             clients.Remove(client);
@@ -123,10 +137,14 @@ class Server {
         string response = "HTTP/1.1 101 Switching Protocols\r\n" +
                           "Connection: Upgrade\r\n" +
                           "Upgrade: websocket\r\n" +
-                          "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
+                          "Sec-WebSocket-Accept: " + acceptKey + "\r\n" +
+                          "Sec-WebSocket-Version: 13\r\n" +
+                          "\r\n";
 
         byte[] respBytes = Encoding.UTF8.GetBytes(response);
         client.stream.Write(respBytes, 0, respBytes.Length);
+        client.stream.Flush();
+        client.ReceiveBuffer.Clear();
     }
 
     private static ISerializable HandleMessage(ISerializable message) {
@@ -139,7 +157,7 @@ class Server {
                 if (_gameData.teamExists(loginAttempt.password)) {
                     GameTeam team = _gameData.GetTeamData(loginAttempt.password);
                     Console.WriteLine($"Team found: {team.name}");
-                    return new LoginResultMessage(team, loginAttempt.password);
+                    return null;// new LoginResultMessage(team, loginAttempt.password);
                 }
                 Console.WriteLine("Team not found");
                 return new LoginResultMessage();
@@ -203,6 +221,11 @@ class Server {
         packet.Write(msg);
         byte[] frame = WebSocketHelper.EncodeFrame(packet.GetBytes(), true);
         client.stream.Write(frame, 0, frame.Length);
+        client.stream.Flush();
+    }
+
+    internal static void SendGameUpdateToAll() {
+        messageQueue.Enqueue(new Message(new DataUpdateMessage(_gameData), clients));
     }
 }
 
@@ -210,6 +233,7 @@ class Server {
 public class ClientConnection {
     public TcpClient client { get; private set; }
     public SslStream stream { get; private set; }
+    public List<byte> ReceiveBuffer = new List<byte>();
 
     public ClientConnection(TcpClient c, SslStream s) { client = c; stream = s; }
 }
@@ -241,6 +265,91 @@ internal class Message {
 
 // --- WebSocket frame helper ---
 public static class WebSocketHelper {
+    public static (List<byte[]> messages, int consumedBytes) DecodeFramesIncremental(ClientConnection connection) {
+        List<byte[]> messages = new List<byte[]>();
+        int i = 0;
+        byte[] bytes = connection.ReceiveBuffer.ToArray();
+
+        while (i + 2 <= bytes.Length) // need at least 2 bytes for header
+        {
+            bool fin = (bytes[i] & 0x80) != 0;
+            int opcode = bytes[i] & 0x0F;
+            i++;
+
+            bool mask = (bytes[i] & 0x80) != 0;
+            ulong payloadLen = (ulong)(bytes[i] & 0x7F);
+            i++;
+
+            //int headerLen = 2;
+
+            if (payloadLen == 126) {
+                if (i + 2 > bytes.Length) {
+                    break; // wait for more bytes
+                }
+                payloadLen = (ulong)((bytes[i] << 8) | bytes[i + 1]);
+                i += 2;
+                //headerLen += 2;
+            } else if (payloadLen == 127) {
+                if (i + 8 > bytes.Length) {
+                    break; // wait for more bytes
+                }
+                payloadLen = 0;
+                for (int j = 0; j < 8; j++)
+                    payloadLen = (payloadLen << 8) | bytes[i + j];
+                i += 8;
+                //headerLen += 8;
+            }
+
+            byte[] payload = new byte[payloadLen];
+
+            int maskLen = mask ? 4 : 0;
+
+            if (i + maskLen + (int)payloadLen > bytes.Length) {
+                // full payload not yet received
+                Console.WriteLine("Full message not yet recieved");
+                Console.WriteLine($"Length:{bytes.Length}");
+                Console.WriteLine($"Expected:{i + maskLen + (int)payloadLen}");
+                Console.WriteLine($"i:{i}");
+                Console.WriteLine($"mask:{maskLen}");
+                Console.WriteLine($"payload:{(int)payloadLen}");
+                break;
+            }
+
+            byte[] maskingKey = mask ? bytes[i..(i + 4)] : Array.Empty<byte>();
+            i += maskLen;
+
+            for (ulong j = 0; j < payloadLen; j++) {
+                payload[j] = mask ? (byte)(bytes[i + (int)j] ^ maskingKey[j % 4]) : bytes[i + (int)j];
+            }
+
+            i += (int)payloadLen;
+
+            switch (opcode) {
+                case 0x1: // text
+                    break;
+                case 0x2: // binary
+                    messages.Add(payload);
+                    break;
+
+                case 0x9: // ping
+                    Console.WriteLine("Ping recieved, sending pong");
+                    SendPong(connection, payload);
+                    break;
+
+                case 0xA: // pong
+                    break; // ignore
+
+                case 0x8: // close
+                    Console.WriteLine("Client requested close");
+                    byte[] closeFrame = EncodeControlFrame(0x8, payload);
+                    connection.stream.Write(closeFrame, 0, closeFrame.Length);
+                    connection.stream.Flush();
+                    break;
+            }
+        }
+
+        return (messages, i); // i = number of bytes fully consumed
+    }
     public static List<byte[]> DecodeFrames(ClientConnection connection,byte[] bytes) {
         List<byte[]> messages = new List<byte[]>();
         int i = 0;
@@ -256,6 +365,7 @@ public static class WebSocketHelper {
 
             if (payloadLen == 126) {
                 payloadLen = (ulong)BitConverter.ToUInt16(new byte[] { bytes[i + 1], bytes[i] }, 0);
+                
                 i += 2;
             } else if (payloadLen == 127) {
                 payloadLen = BitConverter.ToUInt64(bytes, i);
@@ -282,15 +392,24 @@ public static class WebSocketHelper {
                 case 0x9: // PING
                     Console.WriteLine("pinged, sending pong");
                     SendPong(connection, payload);
-                    break;
+                    return messages;
 
                 case 0xA: // PONG
                           // ignore
                     break;
 
                 case 0x8: // CLOSE
-                    throw new Exception("Client closed connection");
+                    Console.WriteLine("Client sent CLOSE, replying and shutting down");
+
+                    byte[] closeFrame = EncodeControlFrame(0x8, payload);
+                    connection.stream.Write(closeFrame, 0, closeFrame.Length);
+                    connection.stream.Flush();
+
+                    return messages; // stop processing, exit cleanly
             }
+
+            Console.WriteLine($"Expected Length:{i}");
+            Console.WriteLine($"Got:{bytes.Length}");
         }
 
         return messages;

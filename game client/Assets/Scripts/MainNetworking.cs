@@ -77,9 +77,11 @@ public class MainNetworking : MonoBehaviour {
                 websocket.OnMessage += (bytes) =>
                 {
                     Debug.Log("OnMessage!");
-                    //Debug.Log(bytes);
+
                     Packet packet = new Packet(bytes);
-                    HandleMessage(packet.ReadObject());
+                    ISerializable message = packet.ReadObject();
+                    Debug.Log($"Message: {message.GetType()}");
+                    HandleMessage(message);
                 };
 
                 // waiting for messages
